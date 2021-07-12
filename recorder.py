@@ -168,9 +168,11 @@ def show(ev = None):
         print(repr(event))
 
 
-def extract(filter : Callable[[tuple], bool] = lambda x : True) -> List[tuple]:
+def extract(filter : Callable[[tuple], bool] = lambda x : True, raw : bool = False) -> List[tuple]:
     r = event_list.copy()
     event_list.clear()
+    if raw:
+        return list(ei for ei in r if filter(ei))
     return user_sequence(list(ei for ei in r if filter(ei)))
 
 
