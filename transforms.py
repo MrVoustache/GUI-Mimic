@@ -1,4 +1,4 @@
-from events import Event
+from events import Event, MouseEvent, MouseMove, MousePress, MouseRelease, MouseScroll, MouseStart, MouseStop
 from typing import Any, Callable, List, Sequence, Union
 
 
@@ -26,7 +26,8 @@ class Transform:
         try:
             return self.function(event, *self.args, **self.kwargs)
         except:
-            raise ValueError("Given function did not work for event " + str(event))
+            import traceback
+            raise ValueError("Given function did not work for " + str(event) + ":\n" + traceback.format_exc())
 
 
 
@@ -81,7 +82,7 @@ class filter_events:
     """
     A simple class-filter function for events.
     Just give it the classes of events you want to keep.
-    The inverse keyword allowas you in inverse the filtering.
+    The inverse keyword allows you in inverse the filtering.
     """
 
     def __init__(self, *classes : type, inverse : bool = False) -> None:
@@ -100,3 +101,131 @@ class filter_events:
         if isinstance(event, self.classes) != self.inverse:
             return [event]
         return []
+
+
+
+
+
+class relativistic_time:
+
+    """
+    A simple transform to wind up times of event to local times, relative to the last event.
+    """
+
+    def __init__(self) -> None:
+        self.total = None
+        
+    
+    def __call__(self, event : Event) -> Event:
+        from copy import deepcopy
+        e = deepcopy(event)
+        if self.total == None:
+            e.time, self.total = 0, e.time
+        else:
+            e.time, self.total = e.time - self.total, e.time
+        return e
+
+
+class refine_phase_1:
+
+    """
+    Refines the sequence by marking the starts and stops of the mouse.
+    """
+
+    def __init__(self, *, inactivity : int = 100000000, max_duration : int = 2000000000) -> None:
+        self.last_t = 0
+        self.elapsed = 0
+        self.moving = False
+        self.last_ev = None
+
+        if not isinstance(max_duration, int) or not isinstance(inactivity, int):
+            raise TypeError("Expected int, int for inactivity and max_duration, got " + repr(inactivity.__class__.__name__) + " and " + repr(max_duration.__class__.__name__))
+
+        self.inactivity = inactivity
+        self.max_duration = max_duration
+
+        self.starts, self.stops = {}, {}
+    
+
+    def __call__(self, event : Event) -> List[Event]:
+        self.elapsed += event.time
+        self.last_t += event.time
+
+        if self.moving and self.last_t > self.inactivity:
+            self.moving = False
+            self.elapsed = self.last_t + event.time
+
+
+        if isinstance(event, MouseEvent):
+
+            self.last_t = 0
+
+            if not self.moving and isinstance(event, (MouseMove, MousePress, MouseRelease, MouseScroll)):
+                self.moving = True
+                self.starts[event] = event.time
+                self.stops[event] = 0
+                self.elapsed = 0
+
+            if self.moving and self.elapsed >= self.max_duration:
+                self.moving = False
+                self.elapsed = 0
+
+            elif self.moving:
+                t, ev = self.stops.popitem()
+                self.stops[event] = self.elapsed
+        
+        self.last_ev = event
+
+        return event
+
+
+
+class refine_phase_2:
+
+    """
+    Refines the sequence by creating MouseStart and MouseStop events and by removing MouseMove events.
+    """
+
+    def __init__(self, last_phase : refine_phase_1) -> None:
+        self.last = last_phase
+
+    
+    def clean(self):
+        self.last.elapsed = 0
+        self.last.last_t = 0
+        self.last.moving = False
+        self.last.last_ev = None
+    
+
+    def __call__(self, event : Event) -> List[Event]:
+        if isinstance(event, MouseEvent):
+            if event in self.last.starts:
+                t = self.last.starts.pop(event)
+                if not self.last.starts and not self.last.stops:
+                    self.clean()
+                if not isinstance(event, MouseMove):
+                    l = [MouseStart(t, event.x, event.y), event]
+                else:
+                    l = [MouseStart(t, event.x, event.y)]
+            elif event in self.last.stops:
+                t = self.last.stops.pop(event)
+                if not self.last.starts and not self.last.stops:
+                    self.clean()
+                if not isinstance(event, MouseMove):
+                    l = [MouseStop(t, event.x, event.y), event]
+                else:
+                    l = [MouseStop(t, event.x, event.y)]
+            else:
+                if not isinstance(event, MouseMove):
+                    l = [event]
+                else:
+                    l = []
+        else:
+            l = [event]
+
+        if self.last.last_ev in l and self.last.stops:
+            ev, t = self.last.stops.popitem()
+            ev = MouseStop(t, ev.x, ev.y)
+            l.append(ev)
+        
+        return l

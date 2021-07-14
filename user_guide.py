@@ -1,7 +1,15 @@
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from user_sequence import user_sequence
+from transforms import Transform
+from events import Event
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 from user_scenario import user_scenario
 
 class user_guide:
+
+    """
+    A workbench for editing your sequences and scenarios (usually) for a given software.
+    You can manage sequences and scenarios as attributes.
+    """
 
     def __init__(self) -> None:
         self._functionalities = {}
@@ -28,6 +36,8 @@ class user_guide:
             return super().__setattr__(name, value)
         else:
             self._functionalities[name] = value
+            if isinstance(value, user_scenario):
+                value._guide = self
         
     def __delattr__(self, name: str) -> None:
         if name in self.__dict__:
@@ -37,51 +47,108 @@ class user_guide:
         else:
             raise KeyError("'{}' not in user_guide".format(name))
     
-    def __iter__(self) -> Iterator[Tuple[Any, Any]]:
+    def __iter__(self) -> Iterator[Tuple[str, Union[user_sequence, user_scenario]]]:
         for k, v in self._functionalities.items():
             yield k, v
-        
-    def keys(self) -> List[str]:
-        return [k for k, v in self]
-        
+    
+    def __contains__(self, key : str) -> bool:
+        return key in self._functionalities
+    
+    def __call__(self) -> user_sequence:
+        return self.simulate()
+
     def __str__(self) -> str:
         return "user_guide[" + ", ".join(k for k, v in self) + "]"
     
     __repr__ = __str__
 
-    def chain(self, sequence : List[str]) -> None:
-        to_do = []
-        import re
-        from random import choice
-        for si in sequence:
-            try:
-                if si in self._functionalities:
-                    to_do.append(self._functionalities[si])
-                else:
-                    expr = re.compile(si)
-                    possibilities = []
-                    for sj in self._functionalities:
-                        if expr.fullmatch(sj):
-                            possibilities.append(sj)
-                    if not possibilities:
-                        raise KeyError("No matching name")
-                    to_do.append(self._functionalities[choice(possibilities)])
-            except KeyError:
-                raise KeyError("Unknown functionality")
-        
 
-        for fi in to_do:
-            fi.disturb()(smooth_mouse = True)
+    
+    def sequences(self) -> Iterator[Tuple[str, user_sequence]]:
+        for k, v in self._functionalities.items():
+            if isinstance(v, user_sequence):
+                yield k, v
+    
+    def scenarios(self) -> Iterator[Tuple[str, user_scenario]]:
+        for k, v in self._functionalities.items():
+            if isinstance(v, user_scenario):
+                yield k, v
+        
+    def keys(self) -> List[str]:
+        return [k for k, v in self]
     
 
-    def simulate(self, scenario : Optional[user_scenario] = None) -> None:
-        if scenario == None:
-            choices = []
-            for k, v in self._functionalities.items():
-                if isinstance(v, user_scenario):
-                    choices.append(v)
-                
-            from random import choice
-            self.chain(choice(choices))
-        elif isinstance(scenario, user_scenario):
-            self.chain(scenario)
+    def simulate(self, *scenarios : Optional[Union[str, user_scenario]]) -> user_sequence:
+
+        import re
+        from random import choice
+
+        if not scenarios:
+            scenarios = []
+            for k, v in self.scenarios():
+                scenarios.append(v)
+            
+        else:
+            scenarios = list(scenarios)
+            for i, sci in enumerate(scenarios):
+                if not isinstance(sci, (str, user_scenario)):
+                    raise TypeError("Expected str or user_scenario, got " + repr(sci.__class__.__name__))
+                if isinstance(sci, str) and sci in self and not isinstance(getattr(self, sci), user_scenario):
+                    raise KeyError("No corresponding user_scenarion in user_guide : " + repr(sci))
+                if isinstance(sci, str):
+                    if sci in self:
+                        scenarios[i] = getattr(self, sci)
+                    else:
+                        try:
+                            sci = re.compile(sci)
+                        except:
+                            raise KeyError("No corresponding user_scenarion in user_guide : " + repr(sci))
+                        matches = [vi for ki, vi in self.scenarios() if sci.fullmatch(ki)]
+                        scenarios[i] = choice(matches)
+
+                        
+            
+        scenario = choice(scenarios)
+        mouse_resolution = scenario._parameters["mouse_resolution"]
+        smooth_mouse = scenario._parameters["smooth_mouse"]
+
+        result_sequence = []
+
+        for sequence_name in scenario:
+            if sequence_name in self:
+                getattr(self, sequence_name).play(mouse_resolution = mouse_resolution, smooth_mouse = smooth_mouse)
+            else:
+                names = re.compile(sequence_name)
+                matches = [seq for name, seq in self.sequences() if names.fullmatch(name)]
+                seq = choice(matches)
+                result_sequence.extend(seq.play(mouse_resolution = mouse_resolution, smooth_mouse = smooth_mouse))
+        
+        return user_sequence(result_sequence)
+    
+    
+    def apply_transform(self, transform : Union[Callable[[Event], Union[Event, Sequence[Event]]], Transform]) -> None:
+        
+        if not isinstance(transform, Transform):
+            try:
+                transform = Transform(transform)
+            except:
+                raise TypeError("Expected Transform or tranform function, got " + repr(transform.__class__.__name__))
+        
+
+        for obj in dir(self):
+            if isinstance(getattr(self, obj), user_sequence):
+                setattr(self, obj, getattr(self, obj).apply_transform(transform))
+    
+
+    def schedule_transform(self, transform : Union[Callable[[Event], Union[Event, Sequence[Event]]], Transform]) -> None:
+
+        if not isinstance(transform, Transform):
+            try:
+                transform = Transform(transform)
+            except:
+                raise TypeError("Expected Transform or tranform function, got " + repr(transform.__class__.__name__))
+        
+        for obj in dir(self):
+            if isinstance(getattr(self, obj), user_sequence):
+                getattr(self, obj).schedule_transform(transform)
+            

@@ -43,7 +43,7 @@ Mc = mouse.Controller()
 def on_move(x, y):
     if listening[0]:
         event_list.append(MouseMove(time_ns() - origin[0], *Mc.position))
-        generate_artificial_events(event_list[-1])
+        # generate_artificial_events(event_list[-1])
 
 def on_click(x, y, button, pressed):
     if listening[0]:
@@ -51,12 +51,12 @@ def on_click(x, y, button, pressed):
             event_list.append(MousePress(time_ns() - origin[0], *Mc.position, button))
         else:
             event_list.append(MouseRelease(time_ns() - origin[0], *Mc.position, button))
-        generate_artificial_events(event_list[-1])
+        # generate_artificial_events(event_list[-1])
 
 def on_scroll(x, y, dx, dy):
     if listening[0]:
         event_list.append(MouseScroll(time_ns() - origin[0], *Mc.position, dx, dy))
-        generate_artificial_events(event_list[-1])
+        # generate_artificial_events(event_list[-1])
 
 def on_press(key):
     if key == keyboard.Key.ctrl_l:
@@ -67,7 +67,7 @@ def on_press(key):
         hotkeys[2] = True
     if listening[0] and repr(key) != repr(keyboard.KeyCode.from_vk(82)):
         event_list.append(KeyboardPress(time_ns() - origin[0], key))
-        generate_artificial_events(event_list[-1])
+        # generate_artificial_events(event_list[-1])
     if all(hotkeys):
         if listening[0]:
             stop_listening()
@@ -84,61 +84,61 @@ def on_release(key):
     if listening[0] and repr(key) != repr(keyboard.KeyCode.from_vk(82)):
         if last_start[0] != len(event_list) or repr(key) not in (repr(keyboard.Key.ctrl_l), repr(keyboard.Key.alt_l)):
             event_list.append(KeyboardRelease(time_ns() - origin[0], key))
-            generate_artificial_events(event_list[-1])
+            # generate_artificial_events(event_list[-1])
 
 
 
 
 
-artificial_events_generators = []
+# artificial_events_generators = []
 
-def generate_artificial_events(event):
-    for gen in artificial_events_generators:
-        gen(event)
-
-
-
-inactivity = 100000000
-max_duration = 3000000000
-last_start = [-float("inf")]
+# def generate_artificial_events(event):
+#     for gen in artificial_events_generators:
+#         gen(event)
 
 
-def mouse_start(event : Event):       # When the mouse starts moving after a period of inactivity
-    if isinstance(event, MouseMove):
-        last = origin[0]
-        for ei in event_list[:-1]:
-            if isinstance(ei, MouseEvent):
-                last = ei.time
-        t = time_ns()
-        if t - last - origin[0] >= inactivity or last == origin[0]:
-            last_start[0] = time_ns()
-            event_list.append(MouseStart(t - origin[0], *Mc.position))
+
+# inactivity = 100000000
+# max_duration = 3000000000
+# last_start = [-float("inf")]
+
+
+# def mouse_start(event : Event):       # When the mouse starts moving after a period of inactivity
+#     if isinstance(event, MouseMove):
+#         last = origin[0]
+#         for ei in event_list[:-1]:
+#             if isinstance(ei, MouseEvent):
+#                 last = ei.time
+#         t = time_ns()
+#         if t - last - origin[0] >= inactivity or last == origin[0]:
+#             last_start[0] = time_ns()
+#             event_list.append(MouseStart(t - origin[0], *Mc.position))
             
-artificial_events_generators.append(mouse_start)
-move_id = [-1]
+# artificial_events_generators.append(mouse_start)
+# move_id = [-1]
 
-def mouse_stop(event : Event):      # When the mouse stops moving (beginning of a period of inactivity)
-    if isinstance(event, MouseMove):
-        if time_ns() - last_start[0] > max_duration:
-            t = time_ns()
-            last_start[0] = t
-            event_list.append(MouseStop(t - origin[0], *Mc.position))
-            event_list.append(MouseStart(t - origin[0], *Mc.position))
-        ID = move_id[0] + 1
-        move_id[0] = ID
-        def wait_and_mark(ID):
-            t = time_ns()
-            while time_ns() - t < inactivity:
-                if move_id[0] != ID:
-                    return
-                sleep(0.001)
-            if move_id[0] == ID:
-                i = event_list.index(event)
-                event_list.insert(i + 1, MouseStop(event.time, event.x, event.y))
-        t = Thread(target=wait_and_mark, args=(ID, ), daemon=False)
-        t.start()
+# def mouse_stop(event : Event):      # When the mouse stops moving (beginning of a period of inactivity)
+#     if isinstance(event, MouseMove):
+#         if time_ns() - last_start[0] > max_duration:
+#             t = time_ns()
+#             last_start[0] = t
+#             event_list.append(MouseStop(t - origin[0], *Mc.position))
+#             event_list.append(MouseStart(t - origin[0], *Mc.position))
+#         ID = move_id[0] + 1
+#         move_id[0] = ID
+#         def wait_and_mark(ID):
+#             t = time_ns()
+#             while time_ns() - t < inactivity:
+#                 if move_id[0] != ID:
+#                     return
+#                 sleep(0.001)
+#             if move_id[0] == ID:
+#                 i = event_list.index(event)
+#                 event_list.insert(i + 1, MouseStop(event.time, event.x, event.y))
+#         t = Thread(target=wait_and_mark, args=(ID, ), daemon=False)
+#         t.start()
 
-artificial_events_generators.append(mouse_stop)
+# artificial_events_generators.append(mouse_stop)
 
 
 
@@ -159,7 +159,7 @@ m_listener.start()
 
 
 
-        
+
 
 def show(ev = None):
     if ev == None:
@@ -171,9 +171,12 @@ def show(ev = None):
 def extract(filter : Callable[[tuple], bool] = lambda x : True, raw : bool = False) -> List[tuple]:
     r = event_list.copy()
     event_list.clear()
-    if raw:
-        return list(ei for ei in r if filter(ei))
-    return user_sequence(list(ei for ei in r if filter(ei)))
+    seq = user_sequence(list(ei for ei in r if filter(ei)), raw=True).apply(transforms.relativistic_time())
+    if not raw:
+        for ti in seq._default_transform:
+            seq = seq.apply(ti)
+    return seq
+
 
 
 def clear():

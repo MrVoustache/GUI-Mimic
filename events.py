@@ -100,6 +100,9 @@ class MouseEvent(Event):
     An Abstract Base Class for all mouse events.
     """
 
+    x : int
+    y : int
+
 
 class MouseMove(MouseEvent):
 
@@ -121,6 +124,8 @@ class MouseMove(MouseEvent):
     def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
         from time import sleep
         sleep(self.time / 1000000000)
+        while Mc.position != (self.x, self.y):
+            Mc.position = (self.x, self.y)
 
 
 class MousePress(MouseEvent):
@@ -217,6 +222,8 @@ class MouseStart(MouseEvent):
     An event that indicates the mouse started moving. Its x and y attributes indicate the starting of the mouse.
     """
 
+    _generative = True
+
     __slots__ = ("time", "x", "y")
 
     def __init__(self, time : int, x : int, y : int) -> None:
@@ -228,11 +235,11 @@ class MouseStart(MouseEvent):
         self.x = x
         self.y = y
     
-    def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
-        from time import sleep
-        sleep(self.time / 1000000000)
+    def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> List["Event"]:
         if not smooth_mouse:
-            Mc.position = (self.x, self.y)
+            return [MouseMove(self.time, self.x, self.y)]
+        return []
+
 
 
 class MouseStop(MouseEvent):
@@ -241,6 +248,8 @@ class MouseStop(MouseEvent):
     An event that indicates the mouse stopped moving. Its x and y attributes indicate the final position of the mouse.
     """
 
+    _generative = True
+
     __slots__ = ("time", "x", "y")
 
     def __init__(self, time : int, x : int, y : int) -> None:
@@ -252,19 +261,19 @@ class MouseStop(MouseEvent):
         self.x = x
         self.y = y
     
-    def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
-        from time import sleep
+    def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> List["Event"]:
         start, stop = Mc.position, (self.x, self.y)
         MR = max(int(self.time / 1000000000 / mouse_resolution), 1)
         dx = 1 / MR
-        dt = max(self.time / 1000000000 / MR, 0.0001)
+        dt = round(max(self.time / MR, 100000))
         from Bezier import Bezier_curve, random_circle_point
         inter = random_circle_point(start, stop)
         C = Bezier_curve(start, inter, stop)
+        l = []
         for i in range(MR):
-            Mc.position = C(dx * i)
-            sleep(dt)
-        Mc.position = stop
+            l.append(MouseMove(dt, *C(dx * i)))
+        l.append(MouseMove(dt, *stop))
+        return l
 
 
 
@@ -292,7 +301,7 @@ class KeyboardInput(KeyboardEvent):
         self.speed = speed
     
 
-    def play(self, Mc, Kc, *, mouse_resolution: float, smooth_mouse: bool) -> Union[None, List["Event"]]:
+    def play(self, Mc, Kc, *, mouse_resolution: float, smooth_mouse: bool) -> List["Event"]:
         dt = round(1 / self.speed / 2 * 1000000000)
         events = []
 
@@ -337,7 +346,7 @@ class MouseClick(MouseEvent):
 
     def __init__(self, time : int, dt : int, x : Union[int, Callable[[], int]], y : Union[int, Callable[[], int]], button : Button = Button.left, *, times : int = 1) -> None:
         if not isinstance(time, int) or time < 0:
-            raise TypeError("Expected positive integer for time, got " + repr(time.__class__.__name__))
+            raise TypeError("Expected positàive integer for time, got " + repr(time.__class__.__name__))
         if not isinstance(dt, int) or dt < 0:
             raise TypeError("Expected positive integer for dt, got " + repr(dt.__class__.__name__))
         if not isinstance(button, Button):
@@ -353,7 +362,7 @@ class MouseClick(MouseEvent):
         self.y = y
         self.times = times
     
-    def play(self, Mc, Kc, *, mouse_resolution: float, smooth_mouse: bool) -> Union[None, List["Event"]]:
+    def play(self, Mc, Kc, *, mouse_resolution: float, smooth_mouse: bool) -> List["Event"]:
         events = []
 
         events.append(MouseStop(self.time, self.x, self.y))
