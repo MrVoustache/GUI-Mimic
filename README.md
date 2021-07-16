@@ -5,5 +5,6 @@ To make it work, you first need a few Python modules. You can get them with the 
 
 pip install pynput
 pip install python-snappy
+pip install cryptography
 
 Once this is done, you just have to run recorder.py using Python.
