@@ -165,12 +165,58 @@ class user_sequence:
         return user_sequence(play_sequence, raw = True)
 
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
+    def __call__(self, *args: Any, **kwds: Any) -> "user_sequence":
         return self.play(*args, **kwds)
     
 
     def __iter__(self) -> Iterator[Event]:
         return iter(self._sequence)
+    
+
+    def __getitem__(self, index : Union[int, slice]) -> Union[Event, "user_sequence"]:
+        if isinstance(index, int):
+            try:
+                return self._sequence[index]
+            except IndexError:
+                raise IndexError("Sequence index out of range")
+        elif isinstance(index, slice):
+            try:
+                return user_sequence(self._sequence[index])
+            except:
+                raise
+        else:
+            raise TypeError("Sequence indices must be int or slice, not " + repr(index.__class__.__name__))
+    
+
+    def __delitem__(self, index : Union[int, slice]) -> None:
+        try:
+            del self._sequence[index]
+        except:
+            raise
+    
+
+    def __setitem__(self, index : Union[int, slice], value : Union[Event, Iterable[Event]]) -> None:
+        if isinstance(index, int):
+            if not isinstance(value, Event):
+                raise TypeError("Expected Event, got " + repr(value.__class__.__name__))
+            try:
+                self._sequence[index] = value
+            except IndexError:
+                raise IndexError("Sequence index out of range")
+        elif isinstance(index, slice):
+            try:
+                value = list(value)
+            except:
+                raise ValueError("Expected iterable of Events, got " + repr(value.__class__.__name__))
+            for ei in value:
+                if not isinstance(ei, Event):
+                    raise TypeError("Expected iterable of Events, got a " + repr(ei.__class__.__name__))
+            try:
+                self._sequence[index] = value
+            except:
+                raise
+        else:
+            raise TypeError("Sequence indices must be int or slice, not " + repr(index.__class__.__name__))
     
 
     def append(self, event : Event) -> None:
@@ -181,6 +227,7 @@ class user_sequence:
             raise TypeError("Expected Event, got " + repr(event.__class__.__name__))
         self._sequence.append(event)
     
+
     def extend(self, iter : Iterable[Event]) -> None:
         """
         Extends the sequence with the events in the iterable.
@@ -203,3 +250,31 @@ class user_sequence:
         if i < 0 or i >= len(self._sequence):
             raise IndexError("Sequence index out of range")
         return self._sequence.pop(i)
+    
+
+    def clear(self) -> None:
+        """
+        Clears the event sequence.
+        """
+        self._sequence.clear()
+    
+
+    def copy(self) -> "user_sequence":
+        """
+        Returns a deepcopy of the event sequence.
+        """
+        from copy import deepcopy
+        return user_sequence(deepcopy(e) for e in self._sequence)
+    
+
+    def insert(self, i : int, event : Event) -> None:
+        """
+        Inserts an event at the given position in the sequence.
+        """
+        if not isinstance(event, Event):
+            raise TypeError("Expected Event, got " + repr(event.__class__.__name__))
+        if i < 0:
+            i += len(self._sequence)
+        if i < 0 or i >= len(self._sequence):
+            raise IndexError("Sequence index out of range")
+        self._sequence.insert(i, event)

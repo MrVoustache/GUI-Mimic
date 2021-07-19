@@ -168,7 +168,7 @@ def show(ev = None):
         print(repr(event))
 
 
-def extract(filter : Callable[[tuple], bool] = lambda x : True, raw : bool = False) -> List[tuple]:
+def extract(filter : Callable[[tuple], bool] = lambda x : True, *, raw : bool = False) -> List[tuple]:
     r = event_list.copy()
     event_list.clear()
     seq = user_sequence(list(ei for ei in r if filter(ei)), raw=True).apply(transforms.relativistic_time())
