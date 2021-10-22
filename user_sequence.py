@@ -46,6 +46,13 @@ class user_sequence:
         self._atRunTransforms : List[Transform] = []
     
 
+    @property
+    def duration(self) -> float:
+        """
+        The basic time duration of the sequence.
+        """
+        return sum(e.time for e in self) / 1000000000
+
     def apply_transform(self, transform : Union[Callable[[Event], Union[Event, Sequence[Event]]], Transform]) -> "user_sequence":
 
         """
@@ -173,6 +180,10 @@ class user_sequence:
         return iter(self._sequence)
     
 
+    def __len__(self) -> int:
+        return len(self._sequence)
+    
+
     def __getitem__(self, index : Union[int, slice]) -> Union[Event, "user_sequence"]:
         if isinstance(index, int):
             try:
@@ -181,7 +192,7 @@ class user_sequence:
                 raise IndexError("Sequence index out of range")
         elif isinstance(index, slice):
             try:
-                return user_sequence(self._sequence[index])
+                return user_sequence(self._sequence[index], raw = True)
             except:
                 raise
         else:
