@@ -5,6 +5,31 @@ from typing import Any, Callable, List, Sequence, Union
 from pynput.keyboard import Key, KeyCode
 from pynput.mouse import Button
 
+_Last_tick = -1
+def _actual_pause(time : int) -> float:
+    from time import time_ns
+    global _Last_tick
+    t = time_ns()
+    
+    if _Last_tick < 0:
+        _Last_tick = t
+    dt = t - _Last_tick
+    return max(time - dt, 0) / 1000000000
+
+
+def _correct(time : int) -> float:
+    from time import time_ns
+    global _Last_tick
+    t = time_ns()
+    dt = t - _Last_tick
+    return max(time - dt, 0) / 1000000000
+
+
+def _update() -> None:
+    from time import time_ns
+    global _Last_tick
+    _Last_tick = time_ns()
+
 
 class Event(metaclass = ABCMeta):
 
@@ -40,7 +65,27 @@ class Event(metaclass = ABCMeta):
     def copy(self) -> "Event":
         from copy import deepcopy
         return deepcopy(self)
+
+
+
+class SleepEvent(Event):
+    """
+    Just an event that indicates the sequence needs a pause.
+    """
+
+    __slots__ = ("time",)
+
+    def __init__(self, time : int) -> None:
+        if not isinstance(time, int) or time < 0:
+            raise TypeError("Expected positive integer for time, got " + repr(time.__class__.__name__))
+        self.time = time
     
+
+    def play(self, Mc, Kc, *, mouse_resolution: float = 0.01, smooth_mouse: bool = False) -> Union[None, List["Event"]]:
+        from time import sleep
+        sleep(_actual_pause(self.time))
+        sleep(_correct(self.time))
+        _update()
 
 
 class KeyboardEvent(Event):
@@ -68,8 +113,10 @@ class KeyboardPress(KeyboardEvent):
 
     def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
         from time import sleep
-        sleep(self.time / 1000000000)
+        sleep(_actual_pause(self.time))
         Kc.press(self.key)
+        sleep(_correct(self.time))
+        _update()
     
 
 class KeyboardRelease(KeyboardEvent):
@@ -90,8 +137,10 @@ class KeyboardRelease(KeyboardEvent):
     
     def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
         from time import sleep
-        sleep(self.time / 1000000000)
+        sleep(_actual_pause(self.time))
         Kc.release(self.key)
+        sleep(_correct(self.time))
+        _update()
 
 
 class MouseEvent(Event):
@@ -123,9 +172,11 @@ class MouseMove(MouseEvent):
     
     def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
         from time import sleep
-        sleep(self.time / 1000000000)
+        sleep(_actual_pause(self.time))
         while Mc.position != (self.x, self.y):
             Mc.position = (self.x, self.y)
+        sleep(_correct(self.time))
+        _update()
 
 
 class MousePress(MouseEvent):
@@ -151,10 +202,12 @@ class MousePress(MouseEvent):
     
     def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
         from time import sleep
-        sleep(self.time / 1000000000)
+        sleep(_actual_pause(self.time))
         while Mc.position != (self.x, self.y):
             Mc.position = (self.x, self.y)
         Mc.press(self.button)
+        sleep(_correct(self.time))
+        _update()
 
 
 class MouseRelease(MouseEvent):
@@ -180,10 +233,12 @@ class MouseRelease(MouseEvent):
     
     def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
         from time import sleep
-        sleep(self.time / 1000000000)
+        sleep(_actual_pause(self.time))
         while Mc.position != (self.x, self.y):
             Mc.position = (self.x, self.y)
         Mc.release(self.button)
+        sleep(_correct(self.time))
+        _update()
 
 
 class MouseScroll(MouseEvent):
@@ -210,10 +265,12 @@ class MouseScroll(MouseEvent):
     
     def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> Union[None, List["Event"]]:
         from time import sleep
-        sleep(self.time / 1000000000)
+        sleep(_actual_pause(self.time))
         while Mc.position != (self.x, self.y):
             Mc.position = (self.x, self.y)
         Mc.scroll(self.dx, self.dy)
+        sleep(_correct(self.time))
+        _update()
 
 
 class MouseStart(MouseEvent):
@@ -238,7 +295,7 @@ class MouseStart(MouseEvent):
     def play(self, Mc, Kc, *, mouse_resolution : float = 0.01, smooth_mouse : bool = False) -> List["Event"]:
         if not smooth_mouse:
             return [MouseMove(self.time, self.x, self.y)]
-        return []
+        return [SleepEvent(self.time)]
 
 
 
@@ -271,8 +328,7 @@ class MouseStop(MouseEvent):
         C = Bezier_curve(start, inter, stop)
         l = []
         for i in range(MR):
-            l.append(MouseMove(dt, *C(dx * i)))
-        l.append(MouseMove(dt, *stop))
+            l.append(MouseMove(dt, *C(dx * (i + 1))))
         return l
 
 
