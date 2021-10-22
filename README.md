@@ -4,7 +4,9 @@ A GUI fuzzing tool that works by recording the user and making scenarios out of 
 To make it work, you first need a few Python modules. You can get them with the following commands :
 
 pip install pynput
+
 pip install python-snappy       -> Default compression applied when saving objects
+
 pip install cryptography        -> If you want to encrypt your files using a custom key
 
 Once this is done, you just have to run recorder.py using Python. This will start and interactive Python prompt.
