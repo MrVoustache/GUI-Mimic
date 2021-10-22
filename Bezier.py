@@ -15,7 +15,7 @@ class Bezier_curve:
         """
         x = self._p1[0] + (1 - t) ** 2 * (self._p0[0] - self._p1[0]) + t ** 2 * (self._p2[0] - self._p1[0])
         y = self._p1[1] + (1 - t) ** 2 * (self._p0[1] - self._p1[1]) + t ** 2 * (self._p2[1] - self._p1[1])
-        return round(x), round(y)
+        return max(round(x), 0), max(round(y), 0)
 
 
 def random_circle_point(start : Tuple[int, int], stop : Tuple[int, int]) -> Tuple[int, int]:
